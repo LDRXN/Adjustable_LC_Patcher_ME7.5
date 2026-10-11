@@ -20,7 +20,7 @@ The patcher analyzes the supplied ECU firmware together with its matching **ME7I
 * ✅ Configurable RPM windows
 * ✅ Ignition / output cut above the configured LC threshold
 * ✅ Brake and clutch control sequence
-* ✅ MIL / Check Engine indication during RPM programming
+* ✅ Tachometer / RPM needle confirmation during RPM programming
 * ✅ Automatic ECU signal resolution from matching `.ecu`
 * ✅ Automatic firmware hook detection
 * ✅ Automatic code-cave detection
@@ -121,7 +121,7 @@ Important signals include:
 * 📍 Vehicle speed
 * 📍 Clutch switch
 * 📍 Brake condition
-* 📍 MIL / Check Engine status
+* 📍 Tachometer / RPM display control
 * 📍 Knock-control condition
 * 📍 Engine runtime timing signal
 * 📍 Ignition angle
@@ -151,9 +151,9 @@ The patcher resolves hooks for:
 * ⚙️ Periodic LC logic
 * 🔥 Ignition-angle control
 * ✂️ Output cut control
-* 💡 MIL indication
+* 📈 Tachometer / RPM indication
 * 🧠 Knock-control branch
-* 💡 MIL status output
+* 📈 Tachometer / RPM output
 
 Each required structure must be detected uniquely.
 
@@ -182,11 +182,13 @@ The Adjustable LC programming sequence uses:
 
 After completing the sequence, the ECU enters RPM capture mode.
 
-During RPM capture, the **MIL / Check Engine indicator flashes** to indicate that the Adjustable LC programming mode is active.
+When programming mode is entered successfully, the **tachometer needle moves to approximately 7000 RPM for about 1 second**, then returns to displaying the **actual engine RPM**.
 
-The driver can then bring the engine to the desired RPM.
+The driver can then bring the engine to the desired RPM while the tachometer continues to display the real engine speed.
 
 Pressing the **brake** confirms and stores the current RPM as the new Launch Control target.
+
+After the new LC RPM is successfully stored, the **tachometer needle again moves to approximately 7000 RPM for about 1 second**, then returns to the actual engine RPM.
 
 Conceptually:
 
@@ -197,11 +199,19 @@ Conceptually:
       ↓
 RPM Capture Mode
       ↓
+Tachometer → ~7000 RPM for ~1 second
+      ↓
+Return to actual engine RPM
+      ↓
 Select desired engine RPM
       ↓
 Press Brake
       ↓
 New Launch Control RPM stored
+      ↓
+Tachometer → ~7000 RPM for ~1 second
+      ↓
+Return to actual engine RPM
 ```
 
 The RPM must remain inside the configured allowed range.
@@ -210,13 +220,34 @@ If the captured RPM is outside the allowed range, the configured default RPM is 
 
 ---
 
-# 💡 MIL / Check Engine Indication
+# 📈 Tachometer / RPM Indication
 
-During the RPM programming / capture phase, the patch uses the vehicle's **MIL / Check Engine output** as visual feedback.
+The Adjustable LC programming mode uses the vehicle's **tachometer needle** as visual confirmation.
 
-The indicator flashes while the ECU is waiting for the new Launch Control RPM to be confirmed.
+When the programming sequence is completed successfully:
 
-The patch is designed so that its indication is added to the existing factory MIL behavior rather than suppressing an OEM MIL request.
+```text
+Tachometer → approximately 7000 RPM
+Duration   → approximately 1 second
+Then       → returns to actual engine RPM
+```
+
+The engine continues to operate normally and the tachometer displays the real engine speed while the driver selects the desired Launch Control RPM.
+
+When the driver presses the **brake** to confirm and store the selected RPM, the same confirmation movement is performed again:
+
+```text
+New LC RPM stored
+      ↓
+Tachometer → approximately 7000 RPM for ~1 second
+      ↓
+Return to actual engine RPM
+```
+
+This provides a clear confirmation for both:
+
+* entering Adjustable LC programming mode;
+* successfully saving the new Launch Control RPM.
 
 ---
 
@@ -323,7 +354,7 @@ The current default configuration is:
 | ⚡ Lower ignition angle | **-20.25°** |
 | ⚡ Upper ignition angle | **-30°** |
 | ⏱️ Programming sequence timeout | **80 × 100 ms** |
-| 💡 MIL blink half-period | **3 × 100 ms** |
+| 📈 Tachometer confirmation duration | **~1 second** |
 | ⚙️ Engine running threshold | **500 RPM** |
 
 The default programming-sequence window is therefore approximately:
@@ -332,10 +363,10 @@ The default programming-sequence window is therefore approximately:
 8 seconds
 ```
 
-and the default MIL blink half-period is approximately:
+and the tachometer confirmation movement lasts approximately:
 
 ```text
-300 ms
+1 second
 ```
 
 ---
@@ -354,7 +385,6 @@ The patcher allows the following parameters to be changed:
 --lower-angle
 --upper-angle
 --sequence-ticks
---blink-ticks
 --engine-min-rpm
 ```
 
@@ -724,7 +754,7 @@ Existing OEM output-disable requests retain priority.
 
 The patch overlays the required Launch Control cut condition while preserving the existing factory control path when LC conditions are not satisfied.
 
-The implementation also contains handling for the reference `B_kr` branch and two MIL output paths.
+The implementation also contains handling for the reference `B_kr` branch and the tachometer / RPM confirmation output path.
 
 ---
 
@@ -771,7 +801,7 @@ In particular:
 
 * compatibility with every ME7.5 software version is **not guaranteed**;
 * automatically selected RAM is a candidate and does not prove absence of every indirect runtime access;
-* cluster / CAN behavior of the MIL indication requires ECU / vehicle verification;
+* cluster / CAN behavior of the tachometer / RPM indication requires ECU / vehicle verification;
 * hardware timing and real vehicle behavior cannot be validated by the patcher itself.
 
 Unsupported firmware should be rejected rather than patched using guessed addresses.
